@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>一起看电影吧~</title>
+  <style>
+    * {
+      border: 0;
+      padding: 0;
+      margin: 0;
+    }
+    * :focus {
+      outline: 0px;
+    }
+    #main {
+      margin-top: 1.6rem;
+    }
+    #videoFrame{
+      width: 100%;
+      display: flex;
+      justify-content: center;
+
+    }
+    #video{
+      width: 50rem;
+      height: 35rem;
+      border: black .1rem solid;
+      margin: 0 auto;
+    }
+    .control {
+      border-radius: 1rem;
+      width: 6rem;
+      height: 3rem;
+      border: 0;
+      background-color: rgb(208, 208, 252);
+      transition: all .2s;
+    }
+    .control:hover {
+      box-shadow:  .2rem .2rem .4rem rgb(188, 156, 218),
+                  -.2rem -.2rem .4rem rgb(229, 214, 243)
+    }
+    #control,#videoUrl{
+      width: 50rem;
+      height: 50px;
+      padding-top: 20px;
+      margin: 0 auto;
+
+    }
+    #control {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    #videoUrl form {
+      height: 100%;
+      display: flex;
+      justify-content: space-between;
+    }
+    #url,#urlbtn {
+      height: 40px;
+    }
+    #url {
+      width: 39rem;
+      border: 1px solid rgb(154, 154, 162);
+      padding: 0 1rem;
+      border-radius: 12px;
+    }
+    #urlbtn {
+      width: 8rem;
+      border-radius: 1rem;
+    }
+    #count {
+      height: 2rem;
+      padding: .5rem 1rem;
+      border-radius: 1rem;
+      line-height: 2rem;
+      position: fixed;
+      bottom: 50%;
+      background-color: rgb(208, 208, 252);
+    }
+    @media screen and (max-width: 1000px){
+      #count {
+        display: none;
+      }
+    }
+    #jump {
+      overflow: hidden;
+    }
+    #jump input{
+      padding: 0 1rem;
+      height: 2.8rem;
+      width: 6rem;
+      border: .1rem solid rgb(154, 154, 162);
+      margin: 0;
+      border-radius: 1rem;
+    }
+    #preClick{
+      width: 16rem;
+      height: 8rem;
+      position: fixed;
+      top:50%;
+      left: 50%;
+      background-color: rgb(214, 189, 253);
+      transform: translate(-10rem,-10rem);
+      z-index: 999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 2rem;
+      user-select:none;
+    }
+  </style>
+</head>
+<body>
+  <div id="preClick" onclick="preClick()"> <p>点击之后才能观影哦~</p> </div>
+  <div id="main">
+    <div id="videoFrame">
+      <video controls="controls" id="video" >
+        <source src="http://202.119.245.16:8686/2020-05-13/%E6%81%B6%E4%BD%9C%E5%89%A7%E4%B9%8B%E5%90%BB1/1.mp4">
+      </video>
+    </div>
+    <div id="control">
+      <button onclick="back15()" class="control"> << </button>
+      <button onclick="start()" class="control">START</button>
+      <button onclick="pause()" class="control">PAUSE</button>
+      <button onclick="backTobegin()" class="control">BACK</button>
+      <button onclick="go15()" class="control">>></button>
+      <button onclick="jumpTo()" class="control">JUMPTO</button>
+      <form name="jump" id="jump" ><input type="text" name="jump" placeholder="单位：秒"></form>
+    </div>
+    <div id="videoUrl">
+      <form name="changeUrl">
+        <input type="text" placeholder="请输入视频的地址呦~" name="url" id="url">
+        <input type="button" value="更换视频" onclick="change()" id="urlbtn" class="control"> 
+      </form>
+    </div>
+  </div>
+  <div id="count">当前有0位观众</div>
+
+  
+
+  <script type="text/javascript">
+    var video = document.getElementById('video')
+    var ws = new WebSocket('ws://42.192.44.81:8088')
+    //var ws = new WebSocket('ws://10.32.209.143:8080')
+    const status = {
+      isMe : 1,
+      wkup : 0
+    }
+    class Message {
+      constructor(type, value = 0) {
+        this.type = type
+        this.value = value
+      }
+    }
+    ws.addEventListener('open',() => {
+      let mes = new Message('OPEN')
+      ws.send(JSON.stringify(mes))
+    })
+    video.addEventListener('seeked', function(e) {
+      if(status.isMe&&status.wkup){
+        let mes = new Message("SEEKED", video.currentTime)
+        ws.send(JSON.stringify(mes))
+      }else{
+        status.isMe = 1
+      }
+    })
+
+    video.addEventListener('play', function(e) {
+      if(status.isMe&&status.wkup){
+        let mes = new Message("PLAY")
+        ws.send(JSON.stringify(mes))
+      }else{
+        status.isMe = 1
+      }
+    })
+
+    ws.onmessage = function(mes) {
+      let data = JSON.parse(mes.data)
+      status.isMe = 0
+      console.log(data.type)
+      switch(data.type){
+        case "PLAY": video.play();break;
+        case "PAUSE": video.pause();break;
+        case "SEEKED": video.currentTime = data.value;break;
+        case "CHANGE": changeMovie(data.value);break;
+        case "NUMBER": numberChange(data.value);break
+      }
+    }
+    window.onbeforeunload = function(event){    
+      let mes = new Message('CLOSE')
+      ws.send(JSON.stringify(mes))
+      ws.close()
+    };
+    function preClick(){
+      document.getElementById('preClick').remove()
+      console.log('remove')
+    }
+    function change() {
+      let url = changeUrl.url.value
+      let mes = new Message("CHANGE", url)
+      ws.send(JSON.stringify(mes))
+      changeUrl.url.value = ""
+    }
+    function changeMovie(url){
+      console.log(url)
+      video.src = url
+    }
+    function back15() {
+      let mes = new Message("SEEKED", video.currentTime-15)
+      ws.send(JSON.stringify(mes))
+    }
+    function start(){
+      let mes = new Message("PLAY")
+      ws.send(JSON.stringify(mes))
+    }
+    function pause() {
+      let mes = new Message("PAUSE")
+      ws.send(JSON.stringify(mes))
+    }
+    function backTobegin(){
+      let mes = new Message("SEEKED", 0)
+      ws.send(JSON.stringify(mes))
+    }
+    function go15() {
+      let mes = new Message("SEEKED", video.currentTime+15)
+      ws.send(JSON.stringify(mes))
+    }
+    function jumpTo(){
+      let mes = new Message("SEEKED", jump.jump.value)
+      ws.send(JSON.stringify(mes))
+      jump.jump.value = ''
+    }
+    function numberChange(number){
+      document.getElementById('count').innerText = `当前有${number}位观众`
+    }
+  </script>
+
+</body>
+</html>
